@@ -68,10 +68,12 @@ def conv_results2str(show_attrs):
 
 
 def web_crawler(urls, iter_steps, output_file_path):
-    for url in urls:
+    for counts, url in list(enumerate(urls, start=1)):
+        print('url-counts: {}'.format(counts))
         hashes_log = list()
         next_page_url = url
         for step in range(1, iter_steps+1):
+            print('step {}'.format(step))
             r = requests.get(next_page_url)
             html_str = r.text
             soup = BeautifulSoup(html_str, features="html.parser")
