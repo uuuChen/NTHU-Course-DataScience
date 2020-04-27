@@ -12,11 +12,11 @@ args = parser.parse_args()
 
 
 class Node:
-    def __init__(self, parent_node=None, value=None):
+    def __init__(self, parent_node=None, value=None, count=None):
         self.parent = parent_node
         self.value = value
         self.link_node = None
-        self.count = 1
+        self.count = count
         self.children = dict()  # value to node dict
 
     def add_count(self, count):
@@ -64,10 +64,13 @@ def construct_header_table(trans2count):
 
     # reconstruct transactions by header table
     saved_trans2count = dict()
+    print(trans2count)
     for transaction, count in trans2count.items():
         saved_items = [item for item in transaction if item in header_table.keys()]
         saved_transaction = tuple(sorted(saved_items, key=lambda x: header_table[x][0], reverse=True))
-        saved_trans2count[saved_transaction] = count
+        print(saved_transaction, count)
+        saved_trans2count.setdefault(saved_transaction, 0)
+        saved_trans2count[saved_transaction] += count
 
     return header_table, saved_trans2count
 
@@ -75,8 +78,8 @@ def construct_header_table(trans2count):
 def construct_fp_tree(trans2count):
     header_table, saved_trans2count = construct_header_table(trans2count)
     log_title(f'construct-fp-tree')
-    print('trans2count: ' + str(trans2count))
-    print('saved_trans2count: ' + str(saved_trans2count))
+    print(f'trans2count: {trans2count}')
+    print(f'saved_trans2count: {saved_trans2count}')
     if not header_table:
         return None, None
     item2prevNode_dict = dict([(item, None) for item in header_table.keys()])
@@ -92,7 +95,7 @@ def construct_fp_tree(trans2count):
                       f'| correspond item: {item}]')
                 cur_node = corr_node
             else:  # add new node
-                new_node = Node(parent_node=cur_node, value=item)
+                new_node = Node(parent_node=cur_node, value=item, count=count)
                 if item2prevNode_dict[item] is None:  # the first value to appear, so set the header table
                     header_table[item][1] = new_node
                     print(f'\tparent-node: {cur_node.value}\t[add-node | init-header | count: {new_node.count} '
@@ -123,13 +126,14 @@ def get_prefix_trans2count(node):
 
 def mine_fp_tree(header_table, prefix_freq_set, freq_item_list):
     log_title('mine-fp-tree')
-    for item, (item_freq, node_pointer) in reversed(list(header_table.items())):
-        print(f'\nin item {item}')
+    for item, (item_freq, item_node) in reversed(list(header_table.items())):
+        log_title(f'in item {item}')
         new_freq_set = prefix_freq_set.copy()
         new_freq_set.add(item)
         print(f'new_freq_set: {new_freq_set}')
         freq_item_list.append((new_freq_set, item_freq))
-        prefix_trans2count = get_prefix_trans2count(node_pointer)
+        prefix_trans2count = get_prefix_trans2count(item_node)
+        print(f'trans2count: {prefix_trans2count}')
         _, prefix_header_table = construct_fp_tree(prefix_trans2count)
         print(f'prefix_header_table: {prefix_header_table}')
         if prefix_header_table is not None:
@@ -151,8 +155,7 @@ def write_results2file(freq_pats):
     with open(args.save_file_path, "w") as fp:
         for freq_pat, freq in sorted_freq_pats:
             freq_pat_str = ",".join(map(str, freq_pat))
-            freq = round(freq, 4)
-            fp.write(freq_pat_str + f":{freq:.4f}\n")
+            fp.write(freq_pat_str + f":{round(freq, 4):.4f}\n")
 
 
 def fp_growth():
