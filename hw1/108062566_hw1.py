@@ -3,7 +3,7 @@ import requests
 import numpy as np
 
 INPUT_FILE_PATH = './input_hw1.txt'
-OUTPUT_FILE_PATH = './myOutput_hw1.txt'
+OUTPUT_FILE_PATH = './108062566_hw1_output.txt'
 PARTS_OF_URL = ["https://www.blockchain.com/eth/address/", "?view=standard"]
 PERSON_ATTR_KEYS = ['from_hash', 'Nonce', 'Number of Transactions', 'Final Balance', 'Total Sent', 'Total Received',
                     'Total Fees']
