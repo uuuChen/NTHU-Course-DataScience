@@ -23,8 +23,11 @@ class Node:
         self.count += count
 
 
-def log_title(title_str, splin_len=40):
-    print('\n' + '-' * splin_len + ' ' + title_str + ' ' + '-' * splin_len)
+def log_title(title_str, splin_len=100):
+    num_of_dash = splin_len - (len(title_str) + 2)
+    left_num_of_dash = num_of_dash // 2
+    right_num_of_dash = num_of_dash - left_num_of_dash
+    print('\n' + '-' * left_num_of_dash + " " + title_str + " " + '-' * right_num_of_dash)
 
 
 def load_file():
@@ -41,7 +44,7 @@ def load_file():
 
 
 def construct_header_table(trans2count):
-    log_title(f'construct-header-table')
+    log_title(f'construct-header-table', 50)
     # construct header table and transactions array with items which supports are greater than min support
     header_table = dict()  # (item: (frequency, fp_tree_pointer))
     for transaction, count in trans2count.items():
@@ -57,18 +60,16 @@ def construct_header_table(trans2count):
             break
         saved_idx += 1
     if saved_idx == 0:  # all items are less than min support, return (None, None)
-        print('all less than min support')
+        print('** all items\' frequency are less than min support **')
         return None, None
     header_table = dict(np.array(header_rows)[:saved_idx])
     print(f'header table: {header_table}')
 
     # reconstruct transactions by header table
     saved_trans2count = dict()
-    print(trans2count)
     for transaction, count in trans2count.items():
         saved_items = [item for item in transaction if item in header_table.keys()]
         saved_transaction = tuple(sorted(saved_items, key=lambda x: header_table[x][0], reverse=True))
-        print(saved_transaction, count)
         saved_trans2count.setdefault(saved_transaction, 0)
         saved_trans2count[saved_transaction] += count
 
@@ -77,7 +78,7 @@ def construct_header_table(trans2count):
 
 def construct_fp_tree(trans2count):
     header_table, saved_trans2count = construct_header_table(trans2count)
-    log_title(f'construct-fp-tree')
+    log_title(f'construct-fp-tree', 50)
     print(f'trans2count: {trans2count}')
     print(f'saved_trans2count: {saved_trans2count}')
     if not header_table:
@@ -125,23 +126,19 @@ def get_prefix_trans2count(node):
 
 
 def mine_fp_tree(header_table, prefix_freq_set, freq_item_list):
-    log_title('mine-fp-tree')
     for item, (item_freq, item_node) in reversed(list(header_table.items())):
         log_title(f'in item {item}')
         new_freq_set = prefix_freq_set.copy()
         new_freq_set.add(item)
-        print(f'new_freq_set: {new_freq_set}')
         freq_item_list.append((new_freq_set, item_freq))
         prefix_trans2count = get_prefix_trans2count(item_node)
-        print(f'trans2count: {prefix_trans2count}')
         _, prefix_header_table = construct_fp_tree(prefix_trans2count)
-        print(f'prefix_header_table: {prefix_header_table}')
         if prefix_header_table is not None:
             mine_fp_tree(prefix_header_table, new_freq_set, freq_item_list)
 
 
 def depth_first_search(cur_node):
-    print(f'at item: {cur_node.value}\tcount: {cur_node.count}')
+    print(f'current item: {cur_node.value}\tcount: {cur_node.count}')
     if not cur_node.children:
         return
     for item in cur_node.children:
@@ -159,10 +156,17 @@ def write_results2file(freq_pats):
 
 
 def fp_growth():
+    log_title('load-file')
     all_trans2count = load_file()
+
+    log_title('construct-fp-tree')
     fp_tree_root, fp_header_table = construct_fp_tree(all_trans2count)
+
+    log_title('mine-fp-tree')
     freq_item_list = list()
     mine_fp_tree(fp_header_table, prefix_freq_set=set([]), freq_item_list=freq_item_list)
+
+    log_title('write-results')
     write_results2file(freq_item_list)
 
 
