@@ -1,2 +1,6 @@
 *test*
 *.idea*
+hw3/output.csv
+hw3/*.pptx
+hw3/MLP.py
+hw3/.ipynb_checkpoints/
