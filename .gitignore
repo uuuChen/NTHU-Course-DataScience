@@ -4,3 +4,5 @@ hw3/output.csv
 hw3/*.pptx
 hw3/MLP.py
 hw3/.ipynb_checkpoints/
+hw3/*.ipynb
+hw3/myAns.csv

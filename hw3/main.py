@@ -3,20 +3,17 @@ import numpy as np
 import argparse
 
 # data preprocess
-from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
-from sklearn.decomposition import PCA
-from sklearn.feature_selection import SelectKBest
-from sklearn.feature_selection import chi2
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.feature_selection import SelectFromModel
+from imblearn.over_sampling import RandomOverSampler
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
 
 # model
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
+from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.cluster import KMeans
 from sklearn.naive_bayes import GaussianNB
@@ -42,41 +39,55 @@ def load_data():
     return df_train_test, len_of_train
 
 
-def preprocess_data(df, len_of_train, reduction=False, drop_object=False):
+def _set_bound(data, min_value, max_value):
+    data = np.where(data > max_value, max_value, data)
+    data = np.where(data < min_value, min_value, data)
+    return data
+
+
+def preprocess_data(df, len_of_train, drop_object=False):
     data_df, label_df = df.drop(columns=['RainToday']), df['RainToday']
-    mean_imr = SimpleImputer(missing_values=np.nan, strategy='mean', copy=False)
-    label_enc = LabelEncoder()
-    skip_cols = ['Date', 'WindDir9am', 'WindDir3pm', 'WindGustDir']
-    data_df = data_df.drop(columns=skip_cols)
+    median_imr = SimpleImputer(missing_values=np.nan, strategy='median', copy=False)
+
     if drop_object:
         data_df = data_df.drop(columns=[col for col in df.columns if df[col].dtype == np.object])
-    for col in data_df.columns:
+
+    data_df_cols = data_df.columns
+    for col in data_df_cols:
         flat_col = data_df[col].values.reshape(-1, 1)
         if data_df[col].dtypes == np.object:
             # fill dropped values of column by random value of column
             elements = list(set(data_df[col]))[1:]  # nan is in the first index
-            data_df[col] = data_df[col].fillna(pd.Series(np.random.choice(elements, size=len(df.index))))
-
-            # convert to one hot label
-            data_df[col] = label_enc.fit_transform(data_df[col].values).ravel()
+            data_df[col] = data_df[col].fillna(pd.Series(np.random.choice(elements, size=len(data_df[col].isnull()))))
+            if col == 'Date':  # 'Date' has 3314 unique elements, so split them to year, month and day
+                pass
+            else:
+                # convert to one hot label
+                data_df = pd.concat([data_df, pd.get_dummies(data_df[col], prefix=col, drop_first=True)], axis=1)
+                data_df = data_df.drop(col, axis=1)
         else:
-            # fill dropped values of column by mean value of column
-            mean_imr = mean_imr.fit(flat_col)
-            data_df[col] = mean_imr.transform(flat_col).ravel()
+            # fill dropped values of column by median value of column
+            data_df[col] = median_imr.fit_transform(flat_col).ravel()
 
-        # normalize
-        data_df[col] = (data_df[col] - data_df[col].mean()) / data_df[col].std()
-
-    # dimension reduction
-    if reduction:
-        pca = PCA(n_components=10)
-        pca_data = pca.fit_transform(data_df.values)
-        data_df = pd.DataFrame(data=pca_data)
+    # delete date column
+    data_df = data_df.drop(['Date'], axis=1, errors='ignore')
 
     # get train, valid and test data and labels
-    X_train, X_val, y_train, y_val = train_test_split(data_df.values[:len_of_train, :], label_df.values[:len_of_train], test_size=0.2)
+    X_train, X_val, y_train, y_val = train_test_split(
+        data_df.values[:len_of_train, :], label_df.values[:len_of_train], test_size=0.2, shuffle=True)
     X_test = data_df.values[len_of_train:, :]
 
+    # fit normalizer before up-sampling
+    scaler = MinMaxScaler()
+    scaler.fit(X_train)
+    X_train, y_train = RandomOverSampler(random_state=0).fit_resample(X_train, y_train)
+
+    # normalize
+    X_train = scaler.transform(X_train)
+    X_val = scaler.transform(X_val)
+    X_test = scaler.transform(X_test)
+
+    print(X_train.shape, y_train.shape)
     return (X_train, y_train), (X_val, y_val), X_test
 
 
@@ -118,17 +129,18 @@ def main():
     # build models
     models = list()
     models.append(DecisionTreeClassifier())
-    # models.append(SVC(kernel='linear'))
-    # models.append(SVC(kernel='poly'))
-    # models.append(SVC(kernel='rbf'))
-    # models.append(RandomForestClassifier(n_estimators=50))
-    # models.append(KMeans(n_clusters=2))
-    # models.append(AdaBoostClassifier())
-    # models.append(KNeighborsClassifier(2))
+    models.append(SVC(kernel='linear'))
+    models.append(SVC(kernel='poly'))
+    models.append(RandomForestClassifier(n_estimators=100))
+    models.append(KMeans(n_clusters=2))
+    models.append(KNeighborsClassifier(2))
+    models.append(SVC(kernel='rbf'))
+    models.append(AdaBoostClassifier())
     models.append(GaussianNB())
-    # models.append(LinearDiscriminantAnalysis())
-    # models.append(QuadraticDiscriminantAnalysis())
+    models.append(LinearDiscriminantAnalysis())
+    models.append(QuadraticDiscriminantAnalysis())
     models.append(LogisticRegression(solver='liblinear', random_state=0))
+    models.append(XGBClassifier())
 
     # train models and print results
     best_f1_score = 0
@@ -140,9 +152,11 @@ def main():
             best_model = model
 
     # test model
-    # test_predicts = test_model(best_model, test_data)
-    # write_csv(test_predicts)
+    test_predicts = test_model(best_model, test_data)
+    write_csv(test_predicts)
 
 
 if __name__ == '__main__':
     main()
+
+
