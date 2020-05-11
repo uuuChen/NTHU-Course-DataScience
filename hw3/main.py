@@ -51,7 +51,6 @@ def preprocess_data(df, len_of_train, drop_object=False):
     median_imr = SimpleImputer(missing_values=np.nan, strategy='median', copy=False)
     if drop_object:
         data_df = data_df.drop(columns=[col for col in df.columns if df[col].dtype == np.object])
-    # data_df = data_df.drop(['WindDir9am', 'MinTemp', 'MaxTemp'], axis=1, errors='ignore')
     data_df_cols = data_df.columns
     for col in data_df_cols:
         flat_col = data_df[col].values.reshape(-1, 1)
