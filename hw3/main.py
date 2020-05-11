@@ -14,6 +14,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from xgboost import XGBClassifier
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.cluster import KMeans
 from sklearn.naive_bayes import GaussianNB
@@ -48,10 +49,9 @@ def _set_bound(data, min_value, max_value):
 def preprocess_data(df, len_of_train, drop_object=False):
     data_df, label_df = df.drop(columns=['RainToday']), df['RainToday']
     median_imr = SimpleImputer(missing_values=np.nan, strategy='median', copy=False)
-
     if drop_object:
         data_df = data_df.drop(columns=[col for col in df.columns if df[col].dtype == np.object])
-
+    # data_df = data_df.drop(['WindDir9am', 'MinTemp', 'MaxTemp'], axis=1, errors='ignore')
     data_df_cols = data_df.columns
     for col in data_df_cols:
         flat_col = data_df[col].values.reshape(-1, 1)
@@ -60,21 +60,22 @@ def preprocess_data(df, len_of_train, drop_object=False):
             elements = list(set(data_df[col]))[1:]  # nan is in the first index
             data_df[col] = data_df[col].fillna(pd.Series(np.random.choice(elements, size=len(data_df[col].isnull()))))
             if col == 'Date':  # 'Date' has 3314 unique elements, so split them to year, month and day
-                pass
+                data_df['Date'] = pd.to_datetime(data_df['Date'])
+                data_df['Month'] = data_df['Date'].dt.month
+                data_df = pd.concat([data_df, pd.get_dummies(data_df['Month'], prefix='Month', drop_first=False)], axis=1)
             else:
                 # convert to one hot label
-                data_df = pd.concat([data_df, pd.get_dummies(data_df[col], prefix=col, drop_first=True)], axis=1)
+                data_df = pd.concat([data_df, pd.get_dummies(data_df[col], prefix=col, drop_first=False)], axis=1)
                 data_df = data_df.drop(col, axis=1)
         else:
             # fill dropped values of column by median value of column
             data_df[col] = median_imr.fit_transform(flat_col).ravel()
 
     # delete date column
-    data_df = data_df.drop(['Date'], axis=1, errors='ignore')
+    data_df = data_df.drop(['Date', 'RISK_MM'], axis=1, errors='ignore')
 
     # get train, valid and test data and labels
-    X_train, X_val, y_train, y_val = train_test_split(
-        data_df.values[:len_of_train, :], label_df.values[:len_of_train], test_size=0.2, shuffle=True)
+    X_train, X_val, y_train, y_val = train_test_split(data_df.values[:len_of_train, :], label_df.values[:len_of_train], test_size=0.5, shuffle=True)
     X_test = data_df.values[len_of_train:, :]
 
     # fit normalizer before up-sampling
@@ -87,7 +88,7 @@ def preprocess_data(df, len_of_train, drop_object=False):
     X_val = scaler.transform(X_val)
     X_test = scaler.transform(X_test)
 
-    print(X_train.shape, y_train.shape)
+    print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
     return (X_train, y_train), (X_val, y_val), X_test
 
 
@@ -140,7 +141,8 @@ def main():
     models.append(LinearDiscriminantAnalysis())
     models.append(QuadraticDiscriminantAnalysis())
     models.append(LogisticRegression(solver='liblinear', random_state=0))
-    models.append(XGBClassifier())
+    models.append(XGBClassifier(n_estimators=1000))
+    models.append(GradientBoostingClassifier(n_estimators=100))
 
     # train models and print results
     best_f1_score = 0
