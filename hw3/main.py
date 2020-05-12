@@ -8,6 +8,8 @@ from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import RandomOverSampler
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import LabelEncoder
+from imblearn.under_sampling import EditedNearestNeighbours, RepeatedEditedNearestNeighbours
 
 # model
 from sklearn.tree import DecisionTreeClassifier
@@ -53,7 +55,8 @@ def preprocess_data(df, len_of_train, drop_object=False):
         data_df = data_df.drop(columns=[col for col in df.columns if df[col].dtype == np.object])
     data_df_cols = data_df.columns
     for col in data_df_cols:
-        flat_col = data_df[col].values.reshape(-1, 1)
+        flat_col_data = data_df[col].values.reshape(-1, 1)
+        flat_train_col_data = data_df[col].values[:len_of_train].reshape(-1, 1)
         if data_df[col].dtypes == np.object:
             # fill dropped values of column by random value of column
             elements = list(set(data_df[col]))[1:]  # nan is in the first index
@@ -62,30 +65,46 @@ def preprocess_data(df, len_of_train, drop_object=False):
                 data_df['Date'] = pd.to_datetime(data_df['Date'])
                 data_df['Month'] = data_df['Date'].dt.month
                 data_df = pd.concat([data_df, pd.get_dummies(data_df['Month'], prefix='Month', drop_first=False)], axis=1)
+                data_df = data_df.drop('Month', axis=1)
+                # data_df['Month'] = LabelEncoder().fit_transform(data_df['Month'])
             else:
                 # convert to one hot label
                 data_df = pd.concat([data_df, pd.get_dummies(data_df[col], prefix=col, drop_first=False)], axis=1)
                 data_df = data_df.drop(col, axis=1)
+                # data_df[col] = LabelEncoder().fit_transform(data_df[col])
         else:
             # fill dropped values of column by median value of column
-            data_df[col] = median_imr.fit_transform(flat_col).ravel()
+            median_imr.fit(flat_train_col_data)
+            data_df[col] = median_imr.transform(flat_col_data).ravel()
 
     # delete date column
     data_df = data_df.drop(['Date', 'RISK_MM'], axis=1, errors='ignore')
 
     # get train, valid and test data and labels
-    X_train, X_val, y_train, y_val = train_test_split(data_df.values[:len_of_train, :], label_df.values[:len_of_train], test_size=0.5, shuffle=True)
+    X_train, X_val, y_train, y_val = train_test_split(data_df.values[:len_of_train, :], label_df.values[:len_of_train], test_size=0.4, shuffle=True)
     X_test = data_df.values[len_of_train:, :]
 
     # fit normalizer before up-sampling
     scaler = MinMaxScaler()
     scaler.fit(X_train)
-    X_train, y_train = RandomOverSampler(random_state=0).fit_resample(X_train, y_train)
+    X_train, y_train = EditedNearestNeighbours().fit_resample(X_train, y_train)
+    # X_train, y_train = RandomOverSampler(random_state=0).fit_resample(X_train, y_train)
+    # X_train, y_train = RepeatedEditedNearestNeighbours().fit_resample(X_train, y_train)
 
     # normalize
-    X_train = scaler.transform(X_train)
-    X_val = scaler.transform(X_val)
-    X_test = scaler.transform(X_test)
+    # X_train = scaler.transform(X_train)
+    # X_val = scaler.transform(X_val)
+    # X_test = scaler.transform(X_test)
+
+    # feature extraction
+    # num_of_extraction = 120
+    # lr_model = LogisticRegression()
+    # lr_model.fit(X_train, y_train)
+    # score_index_pair = list(sorted(zip(lr_model.coef_[0], range(len(data_df.columns))), key=lambda x: -abs(x[0])))
+    # extracted_indices = np.array(score_index_pair, dtype=int)[:, 1][:num_of_extraction]
+    # X_train = X_train[:, extracted_indices]
+    # X_val = X_val[:, extracted_indices]
+    # X_test = X_test[:, extracted_indices]
 
     print(X_train.shape, y_train.shape, X_val.shape, y_val.shape)
     return (X_train, y_train), (X_val, y_val), X_test
@@ -128,20 +147,20 @@ def main():
 
     # build models
     models = list()
-    models.append(DecisionTreeClassifier())
-    models.append(SVC(kernel='linear'))
-    models.append(SVC(kernel='poly'))
-    models.append(RandomForestClassifier(n_estimators=100))
-    models.append(KMeans(n_clusters=2))
-    models.append(KNeighborsClassifier(2))
-    models.append(SVC(kernel='rbf'))
-    models.append(AdaBoostClassifier())
-    models.append(GaussianNB())
-    models.append(LinearDiscriminantAnalysis())
-    models.append(QuadraticDiscriminantAnalysis())
-    models.append(LogisticRegression(solver='liblinear', random_state=0))
+    # models.append(DecisionTreeClassifier())
+    # models.append(SVC(kernel='linear'))
+    # models.append(SVC(kernel='poly'))
+    # models.append(RandomForestClassifier(n_estimators=100))
+    # models.append(KMeans(n_clusters=2))
+    # models.append(KNeighborsClassifier(2))
+    # models.append(SVC(kernel='rbf'))
+    # models.append(AdaBoostClassifier())
+    # models.append(GaussianNB())
+    # models.append(LinearDiscriminantAnalysis())
+    # models.append(QuadraticDiscriminantAnalysis())
+    # models.append(LogisticRegression(solver='liblinear', random_state=0))
+    # models.append(GradientBoostingClassifier(n_estimators=1000))
     models.append(XGBClassifier(n_estimators=1000))
-    models.append(GradientBoostingClassifier(n_estimators=100))
 
     # train models and print results
     best_f1_score = 0
